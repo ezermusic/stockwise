@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="StockWise monthly stocktaking and inventory reconciliation">
+  <title>StockWise | Stocktaking & Intelligence</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">S</div><div><strong>StockWise</strong><small>Stocktaking & Intelligence</small></div></div>
+    <div class="nav-label">WORKSPACE</div>
+    <button class="nav-item active" data-view="dashboard"><span>▦</span> Dashboard</button>
+    <button class="nav-item" data-view="stocktake"><span>▤</span> Current stocktake</button>
+    <button class="nav-item" data-view="imports"><span>⇧</span> Import stock file</button>
+    <button class="nav-item" data-view="manual"><span>✎</span> Manual count</button>
+    <button class="nav-item" data-view="variances"><span>≠</span> Variance report</button>
+    <button class="nav-item" data-view="reports"><span>▥</span> Reports & exports</button>
+    <button class="nav-item" data-view="history"><span>◷</span> Monthly history</button>
+    <div class="sidebar-bottom"><div class="status-dot"></div><span>Version 2.0 · Browser edition<br><i id="saveStatus" class="save-status">Auto-save on</i></span></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div><div class="eyebrow">INVENTORY CONTROL CENTRE</div><h1 id="pageTitle">Management dashboard</h1><p id="pageSubtitle">Your monthly stock position, reconciled and ready for review.</p></div>
+      <div class="top-actions"><label class="period-label">Stocktake period<input id="periodInput" type="month"></label><button class="btn btn-secondary" id="settingsBtn" title="Company name, sign-off names, thresholds">⚙ Report settings</button><button class="btn btn-primary" id="newPeriodBtn">＋ New stocktake</button></div>
+    </header>
+
+    <section class="view active" id="view-dashboard">
+      <div class="notice" id="dataNotice"><strong>Getting started:</strong> import your stock file (system and physical quantities). Sample data is available to explore the dashboard.</div>
+      <div class="dash play" id="dash">
+        <section class="hero rise" id="hero" style="--i:0"></section>
+        <div class="needs-data">
+          <div class="group-grid" id="groupGrid"></div>
+          <div class="mini-grid" id="miniGrid"></div>
+          <div class="content-grid dash-row">
+            <article class="panel rise" style="--i:4"><div class="panel-heading"><div><h2>Stock value bridge</h2><p>How system cost becomes physical cost</p></div><span class="pill">At cost</span></div><div id="bridge"></div></article>
+            <article class="panel rise" style="--i:5"><div class="panel-heading"><div><h2>Line status</h2><p>Share of items by outcome · click to filter</p></div></div><div id="mix"></div></article>
+          </div>
+          <div class="content-grid">
+            <article class="panel chart-panel rise" style="--i:6"><div class="panel-heading"><div><h2>Variance by category</h2><p>Shortage and surplus by product category</p></div><div class="seg"><button class="active" data-metric="cost">Cost</button><button data-metric="sales">Sales value</button></div></div><div class="chart-wrap"><canvas id="categoryChart"></canvas><div id="chartEmpty" class="empty-chart">Import your stock file to see analysis.</div></div></article>
+            <article class="panel rise" style="--i:7"><div class="panel-heading"><div><h2>Priority alerts</h2><p>Click an alert to filter the items behind it, or export them</p></div><span class="pill pill-alert" id="alertCount">0 alerts</span></div><div id="alertsList" class="alerts-list"><div class="empty-state">No alerts yet.</div></div></article>
+          </div>
+          <div class="content-grid dash-row-eq">
+            <article class="panel rise" style="--i:8"><div class="panel-heading"><div><h2>Expiry radar</h2><p>Stock value at cost by time to expiry</p></div></div><div id="expiryRadar"></div></article>
+            <article class="panel rise" style="--i:9"><div class="panel-heading"><div><h2>Top shortage lines</h2><p>Largest shortages valued at cost</p></div></div><div id="leaders"></div></article>
+          </div>
+          <article class="panel rise" style="--i:10"><div class="panel-heading"><div><h2>Largest discrepancies</h2><p>Ranked by absolute cost variance</p></div><button class="btn btn-quiet" data-goto="stocktake">View reconciliation →</button></div><div class="table-wrap"><table><thead><tr><th>Product</th><th>SKU</th><th>System qty</th><th>Counted qty</th><th>Variance</th><th>Cost variance</th><th>Sales value variance</th><th>Status</th></tr></thead><tbody id="topVarianceBody"><tr><td colspan="8" class="empty-cell">No reconciled items yet.</td></tr></tbody></table></div></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-imports">
+      <div class="section-intro"><div><h2>Import &amp; validation</h2><p>Upload <b>one stock file</b> that holds both the system quantity and the physical quantity for every product. XLSX, XLS and CSV are supported, by drag and drop or the file browser. You can also key counts in on the Manual count page.</p></div><span class="pill">Single-file import</span></div>
+      <div class="import-grid">
+        <article class="panel upload-card"><div class="upload-number">01</div><h3>Stock file</h3><p>One row per product: code, name, <b>system quantity</b>, <b>physical quantity</b>, unit cost and selling price. Category, unit, expiry date, counted by and notes are optional.</p>
+          <label class="file-drop" for="inventoryFile"><span class="upload-symbol">↑</span><strong id="inventoryFileName">Choose stock file</strong><small>Drag &amp; drop here, or click to browse · CSV or Excel</small><input type="file" id="inventoryFile" accept=".csv,.xlsx,.xls"></label>
+          <div id="inventorySheetWrap" class="field-wrap hidden"><label>Worksheet <select id="inventorySheet"></select></label></div>
+          <div id="inventoryMapping" class="mapping-grid"></div>
+          <label class="switch option-inline"><input type="checkbox" id="blankPhysicalToggle"><span class="switch-ui"></span><span class="switch-text"><strong>Treat a blank physical quantity as “not counted”</strong><small>Off by default: a blank physical cell is read as a counted quantity of 0. Turn this on if blank means the item has not been counted yet; those items can then be counted on the Manual count page.</small></span></label>
+          <button class="btn btn-primary full" id="loadInventoryBtn" disabled>Read stock file</button><div id="inventoryImportStatus" class="import-status"></div>
+          <button class="btn btn-danger full hidden" id="removeInventoryBtn" type="button">✕ Remove imported stock file</button></article>
+        <article class="panel format-card"><h3>Expected file layout</h3><p>Column names are detected automatically and can be re-mapped before reading the file. Blank numeric cells are read as 0.</p>
+          <div class="table-wrap"><table class="format-table"><thead><tr><th>id**</th><th>name*</th><th>category</th><th>unit</th><th class="hl">qty</th><th class="hl2">count</th><th>rpack_cost</th><th>sale_price</th><th>expiry</th></tr></thead><tbody><tr><td>SKU-001</td><td>Paracetamol 500mg</td><td>Pharma</td><td>Pack</td><td class="hl">120</td><td class="hl2">118</td><td>2.50</td><td>4.00</td><td>2027-05-01</td></tr><tr><td>SKU-002</td><td>Cough Syrup 100ml</td><td>Pharma</td><td>Bottle</td><td class="hl">40</td><td class="hl2"></td><td>8.00</td><td>12.00</td><td></td></tr></tbody></table></div>
+          <ul class="format-notes"><li><b class="c1">qty</b> is the <b>system quantity</b>; <b class="c2">count</b> is the <b>physical quantity</b>. Variance = system − physical.</li><li>Required: product code, system quantity and unit cost. Everything else is optional.</li><li>One row per SKU. If a SKU repeats, the first row is used and the repeat is flagged.</li></ul>
+          <button class="btn btn-secondary" id="downloadTemplateBtn" type="button">Download stock-file template</button></article>
+      </div>
+      <article class="panel"><div class="panel-heading"><div><h2>Validation summary</h2><p>Review these exceptions before approving a stocktake.</p></div></div><div id="validationSummary" class="validation-grid"><div class="empty-state">Validation results will appear after importing your file.</div></div></article>
+      <div class="panel tip-panel"><strong>How the numbers are read</strong><p>Items are matched by SKU/product code. Blank numeric cells are read as 0, including a blank physical quantity (a counted quantity of 0) unless you choose “not counted” above. Non-numeric text is flagged and set to 0. Manual count entries are added to the physical quantity in the file. The original import is never overwritten by the calculated variance.</p></div>
+    </section>
+
+    <section class="view" id="view-stocktake">
+      <div class="section-intro"><div><h2>Stock reconciliation</h2><p>Search, sort, filter by priority alert and export the current view. Review each line. Edit a physical quantity to record a recount. Variance = system − physical.</p></div><div class="toolbar"><details class="menu" id="viewExportMenu"><summary class="btn btn-secondary">⤓ Export view ▾</summary><div class="menu-pop"><button data-view-export="csv">CSV (all columns)</button><button data-view-export="xlsx">Excel workbook</button><button data-view-export="pdf">PDF report</button></div></details><button class="btn btn-primary" data-goto="imports">Import / update files</button></div></div>
+      <div class="filter-bar"><input id="tableSearch" placeholder="Search SKU or product name…"><select id="varianceFilter"><option value="all">All items</option><option value="shortage">Shortages</option><option value="surplus">Surpluses</option><option value="zero">Zero variance</option><option value="uncounted">Not counted</option><option value="exceptions">Data exceptions</option><option value="expiry">Expired / expiring</option><option value="adjusted">Recounted lines</option></select><select id="categoryFilter"><option value="all">All categories</option></select><select id="alertFilter" title="Filter by priority alert"><option value="">Priority alert: none</option></select><span id="tableCount" class="muted">0 items</span></div>
+      <div class="alert-chip hidden" id="alertChip"><span id="alertChipText"></span><button class="btn btn-quiet" id="alertChipClear">Clear filter ✕</button></div>
+      <div class="panel table-panel"><div class="table-wrap tall"><table id="reconciliationTable"><thead><tr><th data-sort="name" class="sortable">Product / SKU</th><th data-sort="category" class="sortable">Category</th><th data-sort="systemQty" class="sortable">System qty</th><th data-sort="physicalQty" class="sortable">Physical qty</th><th data-sort="variance" class="sortable">Variance</th><th data-sort="cost" class="sortable">Unit cost</th><th data-sort="price" class="sortable">Unit price</th><th data-sort="costVariance" class="sortable">Cost variance</th><th data-sort="salesVariance" class="sortable">Sales value variance</th><th data-sort="expiry" class="sortable">Expiry</th><th data-sort="status" class="sortable">Status</th></tr></thead><tbody id="reconciliationBody"><tr><td colspan="11" class="empty-cell">Import inventory and physical count files to begin.</td></tr></tbody></table></div><div class="table-footer"><span id="tableFooterText">No items loaded</span><span>GH₵ · Variance = System − Physical · click headers to sort</span></div></div>
+    </section>
+
+    <section class="view" id="view-manual">
+      <div class="section-intro"><div><h2>Manual count entry</h2><p>Search the system inventory, pick a product, then record the counted quantity and expiry date. Each entry is added to the physical quantity in your stock file and kept as a draft in this browser.</p></div><span class="pill" id="mcProgress">0 of 0 items counted</span></div>
+      <div class="manual-grid">
+        <article class="panel">
+          <div class="panel-heading"><div><h2>Add a count</h2><p>Type a SKU, barcode or part of the product name</p></div><label class="mini-switch"><input type="checkbox" id="mcBlind" checked> Hide system qty (blind count)</label></div>
+          <div class="mc-search"><input id="mcSearch" type="search" role="combobox" aria-expanded="false" aria-controls="mcList" aria-autocomplete="list" autocomplete="off" placeholder="Search SKU or product name…" disabled><ul id="mcList" class="mc-list hidden" role="listbox" aria-label="Matching products"></ul></div>
+          <div id="mcHint" class="empty-state">Import the stock file first. Its products become the searchable list here.</div>
+          <form id="mcForm" class="mc-form hidden" novalidate>
+            <div id="mcProduct" class="mc-product"></div>
+            <div class="two-col"><label>Quantity counted *<input id="mcQty" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></label><label>Expiry date (optional)<input id="mcExpiry" type="date"></label></div>
+            <div class="two-col"><label>Counted by (optional)<input id="mcBy" placeholder="Name or initials"></label><label>Notes (optional)<input id="mcNotes" placeholder="e.g. shelf B3, damaged box"></label></div>
+            <div id="mcDupe" class="mc-dupe hidden" role="alert"></div>
+            <p class="mc-tip">Counting the same product in several batches? Add one entry per batch; quantities are added together and each batch keeps its own expiry date.</p>
+            <div class="dialog-actions"><button type="button" class="btn btn-secondary" id="mcCancel">Cancel</button><button type="submit" class="btn btn-primary" id="mcAdd">Add count</button></div>
+          </form>
+        </article>
+        <article class="panel table-panel">
+          <div class="panel-heading mc-log-head"><div><h2>Manual entries</h2><p>Newest first. Remove an entry to correct a mistake.</p></div><button class="btn btn-secondary" id="mcClear">Clear all</button></div>
+          <div class="table-wrap tall"><table><thead><tr><th>Time</th><th>Product / SKU</th><th>Qty</th><th>Expiry</th><th>By</th><th>Notes</th><th></th></tr></thead><tbody id="mcLogBody"><tr><td colspan="7" class="empty-cell">No manual entries yet.</td></tr></tbody></table></div>
+          <div class="table-footer"><span id="mcLogFooter">0 entries</span><span>Draft saved in this browser</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="view" id="view-variances">
+      <div class="section-intro"><div><h2>Lines with variances</h2><p>Every counted line where the system and physical quantities differ. Variance = system − physical; positive = shortage.</p></div><div class="toolbar"><button class="btn btn-secondary" id="varCsvBtn">Export CSV</button><button class="btn btn-secondary" id="varXlsxBtn">Export Excel</button><button class="btn btn-primary" id="varPdfBtn">Generate PDF report</button></div></div>
+      <div class="report-preview var-summary" id="varSummary"></div>
+      <div class="filter-bar"><input id="varSearch" placeholder="Search SKU or product name…"><select id="varType"><option value="all">Shortages and surpluses</option><option value="shortage">Shortages only</option><option value="surplus">Surpluses only</option></select><select id="varCategory"><option value="all">All categories</option></select><span id="varCount" class="muted">0 lines</span></div>
+      <div class="panel table-panel"><div class="table-wrap tall"><table id="varTable"><thead><tr><th>#</th><th>Product / SKU</th><th>Category</th><th>System qty</th><th>Physical qty</th><th>Variance</th><th>Unit cost</th><th>Cost variance</th><th>Sales value variance</th><th>% of gross</th><th>Type</th><th>Flags</th></tr></thead><tbody id="varBody"><tr><td colspan="12" class="empty-cell">Import inventory and physical count files to begin.</td></tr></tbody></table></div><div class="table-footer"><span id="varFooter">No lines loaded</span><span>Ranked by absolute cost variance</span></div></div>
+    </section>
+
+    <section class="view" id="view-reports">
+      <div class="section-intro"><div><h2>Reports & exports</h2><p>Generate consistent management reports from the current reconciliation.</p></div><span class="pill">PDF · Excel</span></div>
+      <div class="report-grid">
+        <article class="report-card"><div class="report-icon pdf">PDF</div><h3>Executive stocktaking report</h3><p>Summary KPIs, financial exposure, alerts and top discrepancies.</p><button class="btn btn-primary full" id="exportPdfBtn">Generate PDF report</button></article>
+        <article class="report-card"><div class="report-icon excel">XLS</div><h3>Detailed analysis workbook</h3><p>Executive summary, full reconciliation, shortages, surpluses and exceptions.</p><button class="btn btn-primary full" id="exportExcelBtn">Export Excel workbook</button></article>
+        <article class="report-card"><div class="report-icon csv">CSV</div><h3>Reconciliation data</h3><p>Flat table for further analysis or importing into another system.</p><button class="btn btn-secondary full" id="exportCsvBtn">Export reconciliation CSV</button></article>
+      </div>
+      <article class="panel var-report-panel"><div><h2>Lines with variances report</h2><p>A dedicated report listing every line where the counted quantity differs from the system quantity, with category analysis, totals and a sign-off block.</p></div><div class="toolbar"><button class="btn btn-secondary" id="repVarOpen">View on screen</button><button class="btn btn-secondary" id="repVarCsv">CSV</button><button class="btn btn-secondary" id="repVarXlsx">Excel</button><button class="btn btn-primary" id="repVarPdf">PDF report</button></div></article>
+      <article class="panel"><div class="panel-heading"><div><h2>Report preview</h2><p>Summary values from the selected stocktake period.</p></div></div><div id="reportPreview" class="report-preview"></div></article>
+      <div class="notice notice-warn"><strong>Reporting note:</strong> sales value and gross profit are estimates based on the imported selling price and cost. They are not realized sales or confirmed accounting losses.</div>
+    </section>
+
+    <section class="view" id="view-history">
+      <div class="section-intro"><div><h2>Monthly history</h2><p>Save completed periods and compare stocktaking results over time.</p></div><div class="toolbar"><label class="btn btn-secondary file-btn">Import history JSON<input type="file" id="historyImportFile" accept=".json,application/json" hidden></label><button class="btn btn-primary" id="savePeriodBtn">Save current snapshot</button></div></div>
+      <div class="kpi-grid history-kpis"><article class="mini-kpi"><span>Saved periods</span><strong id="historyCount">0</strong></article><article class="mini-kpi"><span>Latest period</span><strong id="historyLatest">—</strong></article><article class="mini-kpi"><span>Latest shortage exposure</span><strong id="historyShortage">—</strong></article><article class="mini-kpi"><span>Storage</span><strong>Browser</strong><small>Local to this browser</small></article></div>
+      <div class="content-grid"><article class="panel"><div class="panel-heading"><div><h2>Trend</h2><p>Shortage, surplus and net cost variance by period</p></div></div><div class="chart-wrap"><canvas id="historyChart"></canvas><div id="trendEmpty" class="empty-chart" style="display:flex">Save a snapshot to start the trend.</div></div></article><article class="panel"><div class="panel-heading"><div><h2>Month-on-month</h2><p>Current period against the previous saved period</p></div></div><div id="historyCompare"></div></article></div>
+      <article class="panel"><div class="panel-heading"><div><h2>Saved stocktaking periods</h2><p>Snapshots are saved on this device in Version 2.0.</p></div><button class="btn btn-secondary" id="exportHistoryBtn">Export history JSON</button></div><div class="table-wrap"><table><thead><tr><th>Period</th><th>Saved at</th><th>Items</th><th>Shortage cost</th><th>Surplus cost</th><th>Net cost variance</th><th>Actions</th></tr></thead><tbody id="historyBody"><tr><td colspan="7" class="empty-cell">No saved periods yet.</td></tr></tbody></table></div></article>
+      <div class="notice notice-warn"><strong>Version 2.0 note:</strong> history and your working stocktake are saved automatically in this browser (IndexedDB). They are not shared between devices and are removed if you clear site data. Export history regularly; a later backend release should use a database and user authentication.</div>
+    </section>
+
+    <footer class="footer"><span>StockWise v2.0</span><span>Inventory reconciliation · Management reporting</span><span>Use approved stocktake snapshots for decisions</span></footer>
+  </main>
+</div>
+<div class="toast-region" id="toastRegion" aria-live="polite"></div>
+<dialog id="periodDialog"><form method="dialog" class="dialog-card"><div class="dialog-head"><div><h2>Start a new stocktake</h2><p>Choose the month you are counting.</p></div><button class="icon-btn" value="cancel" aria-label="Close">×</button></div><label>Stocktake month<input id="newPeriodInput" type="month" required></label><label>Notes (optional)<textarea id="periodNotes" rows="3" placeholder="e.g. month-end stock count"></textarea></label><div class="dialog-actions"><button class="btn btn-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="createPeriodConfirm" value="confirm">Create period</button></div></form></dialog>
+<dialog id="settingsDialog"><form method="dialog" class="dialog-card"><div class="dialog-head"><div><h2>Report settings</h2><p>Used on the PDF and Excel reports and in the alerts.</p></div><button class="icon-btn" value="cancel" aria-label="Close">×</button></div>
+<label>Company / business name<input id="setCompany" placeholder="e.g. Adom Pharmacy Ltd"></label>
+<div class="two-col"><label>Prepared by<input id="setPrepared"></label><label>Reviewed by<input id="setReviewed"></label></div>
+<div class="two-col"><label>High-value shortage line (GH₵)<input id="setHighValue" type="number" min="0" step="any"></label><label>Expiry warning window (days)<input id="setExpiry" type="number" min="1" step="1"></label></div>
+<div class="data-zone"><strong>Saved data on this device</strong><p>Your current stocktake, manual entries and monthly history are saved automatically in this browser and survive refreshes and restarts.</p><div class="toolbar"><button type="button" class="btn btn-secondary" id="clearSessionBtn">Clear current session</button><button type="button" class="btn btn-danger" id="wipeAllBtn">Delete all saved data</button></div></div>
+<div class="dialog-actions"><button class="btn btn-secondary" value="cancel">Cancel</button><button class="btn btn-primary" id="saveSettingsBtn" value="confirm">Save settings</button></div></form></dialog>
+<script src="app.js"></script>
+</body>
+</html>
